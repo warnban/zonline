@@ -41,30 +41,45 @@ function replyMenuKeyboard() {
 }
 
 function mainMenuInline() {
+  // По одной кнопке в ряд — на мобильном 2 в ряд обрезают текст («Premium» → «Premiu»).
   return new InlineKeyboard()
     .text("🎮 Steam", "menu:steam")
-    .text("⭐ Premium", "menu:premium")
     .row()
-    .text("✨ Stars", "menu:stars")
-    .text("📦 Заказы", "menu:orders")
+    .text("⭐ Telegram Premium", "menu:premium")
     .row()
-    .url("🌐 Сайт", env.APP_URL);
+    .text("✨ Telegram Stars", "menu:stars")
+    .row()
+    .text("📦 Мои заказы", "menu:orders")
+    .row()
+    .url("🌐 Сайт zynqo.ru", env.APP_URL);
+}
+
+function paymentMethodLabel(m: (typeof FREEKASSA_PAYMENT_METHODS)[number]): string {
+  if (m.crypto && m.feeNote) return `${m.label} (${m.feeNote})`;
+  return m.label;
 }
 
 function paymentKeyboard(prefix: string) {
   const kb = new InlineKeyboard();
   for (const m of FREEKASSA_PAYMENT_METHODS) {
-    const label = m.feeNote ? `${m.label} · ${m.feeNote}` : m.label;
-    kb.text(label, `${prefix}:pay:${m.id}`).row();
+    kb.text(paymentMethodLabel(m), `${prefix}:pay:${m.id}`).row();
   }
   kb.text("« Отмена", "menu:home");
   return kb;
 }
 
+function truncateForButton(text: string, max = 28): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1)}…`;
+}
+
 function usernamePickKeyboard(flow: "premium" | "stars", tgUsername?: string) {
   const kb = new InlineKeyboard();
   if (tgUsername) {
-    kb.text(`👤 Себе (@${tgUsername})`, `${flow}:username:me`).row();
+    kb.text(
+      truncateForButton(`👤 Себе (@${tgUsername})`),
+      `${flow}:username:me`,
+    ).row();
   }
   kb.text("✏️ Ввести @username", `${flow}:username:manual`).row();
   kb.text("« Отмена", "menu:home");
@@ -183,17 +198,23 @@ async function start() {
     await ctx.answerCallbackQuery();
     const email = telegramBotEmail(ctx.from!.id);
     const orders = await getOrdersByEmail(email, 5);
-    if (orders.length === 0) {
-      await ctx.reply("Заказов пока нет. Оформите первый через меню 👇", {
+    const text =
+      orders.length === 0
+        ? "Заказов пока нет. Оформите первый через меню 👇"
+        : `<b>Последние заказы</b>\n${orders
+            .map(
+              (o) =>
+                `• <code>${o.publicId}</code> — ${o.status} — ${formatRub(Number(o.amountRub))}`,
+            )
+            .join("\n")}`;
+    if (ctx.callbackQuery.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: "HTML",
         reply_markup: mainMenuInline(),
       });
       return;
     }
-    const lines = orders.map(
-      (o) =>
-        `• <code>${o.publicId}</code> — ${o.status} — ${formatRub(Number(o.amountRub))}`,
-    );
-    await ctx.reply(`<b>Последние заказы</b>\n${lines.join("\n")}`, {
+    await ctx.reply(text, {
       parse_mode: "HTML",
       reply_markup: mainMenuInline(),
     });
@@ -454,9 +475,10 @@ async function start() {
           reply_markup: new InlineKeyboard()
             .text("300 ₽", "steam:amt:300")
             .text("500 ₽", "steam:amt:500")
-            .text("1000 ₽", "steam:amt:1000")
             .row()
+            .text("1000 ₽", "steam:amt:1000")
             .text("2000 ₽", "steam:amt:2000")
+            .row()
             .text("5000 ₽", "steam:amt:5000"),
         },
       );
@@ -550,6 +572,11 @@ async function start() {
     await ctx.answerCallbackQuery();
     const walletAmountRub = Number(ctx.match![1]);
     const session = await loadSession(ctx.from!.id);
+    const login = String(session.data?.login ?? "");
+    if (!login) {
+      await ctx.reply("Сессия истекла. Нажмите «Главное меню» или /start");
+      return;
+    }
     const settings = await getPricingSettings();
     const payment = calculateSteamPaymentRub(walletAmountRub, settings);
     await saveSession(ctx.from!.id, {
@@ -567,6 +594,11 @@ async function start() {
     await ctx.answerCallbackQuery();
     const quantity = Number(ctx.match![1]);
     const session = await loadSession(ctx.from!.id);
+    const username = String(session.data?.username ?? "");
+    if (!username) {
+      await ctx.reply("Сессия истекла. Нажмите «Главное меню» или /start");
+      return;
+    }
     const settings = await getPricingSettings();
     const quote = await getTelegramStarsQuote();
     const totalRub = calculateRetailRub(parseFloat(quote.price_per_star) * quantity, settings);
@@ -576,7 +608,7 @@ async function start() {
       data: { ...session.data, quantity },
     });
     await ctx.reply(
-      `✨ ${quantity} Stars\n<b>${formatRub(totalRub)}</b>\n\nВыберите оплату:`,
+      `✨ ${quantity} Stars → @${username}\n<b>${formatRub(totalRub)}</b>\n\nВыберите оплату:`,
       { parse_mode: "HTML", reply_markup: paymentKeyboard("stars") },
     );
   });
