@@ -33,18 +33,39 @@ function signApiRequest(data: Record<string, string | number>): string {
   return createHmac("sha256", apiKey).update(line).digest("hex");
 }
 
+/** Домены FK Wallet — не платёжная форма Freekassa (docs: pay.freekassa.net/form/...). */
+const FREEKASSA_WALLET_HOSTS = new Set(["fmt.me", "fkwallet.io", "www.fkwallet.io"]);
+
+function isFreekassaWalletUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return (
+      FREEKASSA_WALLET_HOSTS.has(host) ||
+      host.endsWith(".fkwallet.io") ||
+      host.endsWith(".fmt.me")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function buildFreekassaPayFormUrl(orderId: number, orderHash: string): string {
+  return `https://pay.freekassa.net/form/${orderId}/${orderHash}`;
+}
+
 function paymentLocationFromResponse(body: {
   location?: string;
   Location?: string;
   orderId?: number;
   orderHash?: string;
 }): string {
-  const location = String(body.location ?? body.Location ?? "").trim();
-  if (location) return location;
-
+  // Доки: location часто пустой; URL = pay.freekassa.net/form/{orderId}/{orderHash}
   if (body.orderId && body.orderHash) {
-    return `https://pay.freekassa.net/form/${body.orderId}/${body.orderHash}`;
+    return buildFreekassaPayFormUrl(body.orderId, body.orderHash);
   }
+
+  const location = String(body.location ?? body.Location ?? "").trim();
+  if (location && !isFreekassaWalletUrl(location)) return location;
 
   return "";
 }
@@ -119,6 +140,14 @@ export async function createFreekassaApiOrder(
   const paymentUrl = paymentLocationFromResponse(body);
   if (!paymentUrl) {
     throw new Error(`Freekassa did not return payment URL: ${text.slice(0, 300)}`);
+  }
+
+  const apiLocation = String(body.location ?? body.Location ?? "").trim();
+  if (apiLocation && isFreekassaWalletUrl(apiLocation)) {
+    console.warn(
+      "[freekassa] API returned FK Wallet redirect, using pay.freekassa.net form:",
+      apiLocation,
+    );
   }
 
   return {
