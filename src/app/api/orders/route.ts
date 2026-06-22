@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { placeOrder } from "@/lib/orders/place-order";
 import { createOrderSchema } from "@/lib/orders/schemas";
 import { resolveFreekassaClientIp } from "@/lib/payments/freekassa-api";
+import { getFreekassaConfigStatus } from "@/lib/payments/freekassa";
 import { DEFAULT_FREEKASSA_METHOD_ID } from "@/lib/payments/freekassa-methods";
 
 function clientIp(request: NextRequest): string {
@@ -42,8 +43,16 @@ export async function POST(request: NextRequest) {
     });
 
     if (!result.paymentUrl) {
+      const fk = getFreekassaConfigStatus();
+      const hint = fk.missing.length
+        ? `Не заданы переменные: ${fk.missing.join(", ")}`
+        : "Freekassa API не вернул ссылку на оплату";
       return NextResponse.json(
-        { ...result, error: "Оплата временно недоступна. Попробуйте позже или напишите в поддержку." },
+        {
+          ...result,
+          error: "Оплата временно недоступна. Попробуйте позже или напишите в поддержку.",
+          hint,
+        },
         { status: 503 },
       );
     }

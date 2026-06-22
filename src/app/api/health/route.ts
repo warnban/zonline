@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isFazerConfigured } from "@/lib/fazercards/client";
 import { getFazerBalance } from "@/lib/fazercards/catalog";
+import { getFreekassaConfigStatus } from "@/lib/payments/freekassa";
 import { cacheGet } from "@/lib/redis";
 
 export async function GET() {
@@ -25,10 +26,13 @@ export async function GET() {
     redisOk = false;
   }
 
+  const freekassa = getFreekassaConfigStatus();
+
   return NextResponse.json({
     ok: true,
     services: {
       fazer: { configured: isFazerConfigured(), ok: fazerOk, balance: fazerBalance },
+      freekassa,
       redis: { ok: redisOk },
     },
     timestamp: new Date().toISOString(),

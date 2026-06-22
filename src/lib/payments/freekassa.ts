@@ -34,6 +34,18 @@ export function isFreekassaConfigured(): boolean {
   );
 }
 
+/** Для диагностики — какие переменные не заданы (без значений). */
+export function getFreekassaConfigStatus(): {
+  configured: boolean;
+  missing: string[];
+} {
+  const missing: string[] = [];
+  if (!env.FREEKASSA_API_KEY?.trim()) missing.push("FREEKASSA_API_KEY");
+  if (!env.FREEKASSA_MERCHANT_ID?.trim()) missing.push("FREEKASSA_MERCHANT_ID");
+  if (!env.FREEKASSA_SECRET_2?.trim()) missing.push("FREEKASSA_SECRET_2");
+  return { configured: missing.length === 0, missing };
+}
+
 export function getFreekassaUrls(baseUrl = env.APP_URL): FreekassaUrls {
   const base = baseUrl.replace(/\/$/, "");
   return {
