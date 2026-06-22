@@ -2,7 +2,7 @@ import { nanoid } from "nanoid";
 import type { OrderType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { generatePublicOrderId } from "@/lib/pricing";
-import { createFreekassaApiOrder } from "@/lib/payments/freekassa-api";
+import { createFreekassaCheckout } from "@/lib/payments/freekassa-checkout";
 import { isFreekassaConfigured } from "@/lib/payments/freekassa";
 import { DEFAULT_FREEKASSA_METHOD_ID } from "@/lib/payments/freekassa-methods";
 
@@ -47,7 +47,7 @@ export async function createOrderWithPayment(input: CreateOrderParams) {
 
   let paymentUrl: string | null = null;
   if (isFreekassaConfigured()) {
-    const fk = await createFreekassaApiOrder({
+    const fk = await createFreekassaCheckout({
       paymentId: result.order.publicId,
       amountRub: Number(result.order.amountRub),
       email: result.order.email,

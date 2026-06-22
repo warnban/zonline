@@ -1,4 +1,4 @@
-import { getFreekassaUrls } from "@/lib/payments/freekassa";
+import { getFreekassaUrls, getFreekassaConfigStatus } from "@/lib/payments/freekassa";
 import { FREEKASSA_PAYMENT_METHODS } from "@/lib/payments/freekassa-methods";
 import { env } from "@/lib/env";
 
@@ -16,35 +16,47 @@ function CopyBlock({ label, value, hint }: { label: string; value: string; hint?
 
 export function FreekassaSetupPanel() {
   const urls = getFreekassaUrls();
-  const apiConfigured = Boolean(env.FREEKASSA_API_KEY && env.FREEKASSA_MERCHANT_ID);
+  const fk = getFreekassaConfigStatus();
 
   return (
     <section className="mt-10 max-w-2xl">
-      <h2 className="text-lg font-semibold">Freekassa — API и URL</h2>
+      <h2 className="text-lg font-semibold">Freekassa — оплата и URL</h2>
       <p className="mt-1 text-sm text-muted">
-        Интеграция через{" "}
-        <span className="font-medium text-foreground">API v1</span> (
-        <code className="text-xs">https://api.fk.life/v1/</code>), не SCI. Домен:{" "}
+        Домен:{" "}
         <span className="font-medium text-foreground">{env.APP_URL.replace(/^https?:\/\//, "")}</span>
+        {" · "}
+        Режим оплаты:{" "}
+        <span className="font-medium text-foreground">
+          {fk.paymentMode === "sci"
+            ? "SCI pay.fk.money (СБП/карта напрямую)"
+            : fk.paymentMode === "api"
+              ? "API (может открывать FK Wallet)"
+              : "не настроено"}
+        </span>
       </p>
 
       <div className="mt-4 rounded-xl border border-border bg-surface-elevated/50 p-4 text-sm">
         <p className="font-medium">Переменные .env</p>
         <ul className="mt-2 list-inside list-disc space-y-1 text-muted">
           <li>
-            <code>FREEKASSA_API_KEY</code> — API-ключ из ЛК
-            {apiConfigured ? " ✓" : " (не задан)"}
+            <code>FREEKASSA_SECRET_1</code> — подпись формы оплаты (SCI, обязательно для СБП/карт)
           </li>
           <li>
-            <code>FREEKASSA_MERCHANT_ID</code> — ID магазина (shopId)
+            <code>FREEKASSA_SECRET_2</code> — подпись вебхука (ответ YES)
           </li>
           <li>
-            <code>FREEKASSA_SECRET_2</code> — подпись вебхука оповещения
+            <code>FREEKASSA_MERCHANT_ID</code> — ID магазина
           </li>
           <li>
-            <code>FREEKASSA_CLIENT_IP</code> — IP сервера (не 127.0.0.1)
+            <code>FREEKASSA_API_KEY</code> — опционально, fallback если нет SECRET_1
+          </li>
+          <li>
+            <code>FREEKASSA_CLIENT_IP</code> — IP сервера для API fallback
           </li>
         </ul>
+        {fk.missing.length > 0 && (
+          <p className="mt-2 text-xs text-warning">Не задано: {fk.missing.join(", ")}</p>
+        )}
       </div>
 
       <div className="mt-4 space-y-3">

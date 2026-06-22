@@ -26,24 +26,60 @@ export type FreekassaUrls = {
   failMethod: "GET";
 };
 
-export function isFreekassaConfigured(): boolean {
+export function isFreekassaNotifyConfigured(): boolean {
+  return Boolean(env.FREEKASSA_MERCHANT_ID?.trim() && env.FREEKASSA_SECRET_2?.trim());
+}
+
+/** Прямая оплата СБП/карта/крипта — форма SCI https://pay.fk.money/ (docs §1.3). */
+export function isFreekassaSciConfigured(): boolean {
   return Boolean(
-    env.FREEKASSA_API_KEY &&
-      env.FREEKASSA_MERCHANT_ID &&
-      env.FREEKASSA_SECRET_2,
+    env.FREEKASSA_MERCHANT_ID?.trim() &&
+      env.FREEKASSA_SECRET_1?.trim() &&
+      isFreekassaNotifyConfigured(),
   );
+}
+
+export function isFreekassaApiConfigured(): boolean {
+  return Boolean(
+    env.FREEKASSA_API_KEY?.trim() &&
+      env.FREEKASSA_MERCHANT_ID?.trim() &&
+      isFreekassaNotifyConfigured(),
+  );
+}
+
+/** Можно принимать платежи (SCI предпочтительнее — без редиректа в FK Wallet). */
+export function isFreekassaConfigured(): boolean {
+  return isFreekassaSciConfigured() || isFreekassaApiConfigured();
 }
 
 /** Для диагностики — какие переменные не заданы (без значений). */
 export function getFreekassaConfigStatus(): {
   configured: boolean;
+  paymentMode: "sci" | "api" | "none";
   missing: string[];
 } {
   const missing: string[] = [];
-  if (!env.FREEKASSA_API_KEY?.trim()) missing.push("FREEKASSA_API_KEY");
   if (!env.FREEKASSA_MERCHANT_ID?.trim()) missing.push("FREEKASSA_MERCHANT_ID");
   if (!env.FREEKASSA_SECRET_2?.trim()) missing.push("FREEKASSA_SECRET_2");
-  return { configured: missing.length === 0, missing };
+
+  const hasSci = Boolean(env.FREEKASSA_SECRET_1?.trim());
+  const hasApi = Boolean(env.FREEKASSA_API_KEY?.trim());
+
+  if (!hasSci && !hasApi) {
+    missing.push("FREEKASSA_SECRET_1 (рекомендуется для СБП/карт) или FREEKASSA_API_KEY");
+  } else if (!hasSci) {
+    missing.push("FREEKASSA_SECRET_1 (без него оплата уходит в FK Wallet)");
+  }
+
+  let paymentMode: "sci" | "api" | "none" = "none";
+  if (isFreekassaSciConfigured()) paymentMode = "sci";
+  else if (isFreekassaApiConfigured()) paymentMode = "api";
+
+  return {
+    configured: isFreekassaConfigured(),
+    paymentMode,
+    missing,
+  };
 }
 
 export function getFreekassaUrls(baseUrl = env.APP_URL): FreekassaUrls {
@@ -80,8 +116,8 @@ export function buildFreekassaPaymentSign(
 
 /** Полный URL редиректа на оплату (GET https://pay.fk.money/) */
 export function buildFreekassaPaymentUrl(params: FreekassaPaymentParams): string {
-  if (!isFreekassaConfigured()) {
-    throw new Error("Freekassa is not configured");
+  if (!isFreekassaSciConfigured()) {
+    throw new Error("Freekassa SCI is not configured (need FREEKASSA_SECRET_1)");
   }
 
   const merchantId = env.FREEKASSA_MERCHANT_ID!;
