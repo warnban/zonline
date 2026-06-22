@@ -1,12 +1,12 @@
 import "dotenv/config";
-import { Bot, InlineKeyboard } from "grammy";
+import { Bot, InlineKeyboard, Keyboard } from "grammy";
+import type { Context } from "grammy";
 import { env } from "@/lib/env";
 import { checkSteamLogin, getTelegramPremiumQuote, getTelegramStarsQuote } from "@/lib/fazercards/catalog";
 import { placeOrder } from "@/lib/orders/place-order";
 import { getOrdersByEmail } from "@/lib/orders/create";
 import {
   FREEKASSA_PAYMENT_METHODS,
-  DEFAULT_FREEKASSA_METHOD_ID,
   getFreekassaMethod,
 } from "@/lib/payments/freekassa-methods";
 import { resolveFreekassaClientIp } from "@/lib/payments/freekassa-api";
@@ -22,6 +22,7 @@ type Session = {
 };
 
 const SESSION_TTL = 3600;
+const MENU_BTN = "🏠 Главное меню";
 
 async function loadSession(userId: number): Promise<Session> {
   return (await cacheGet<Session>(`tg:session:${userId}`)) ?? {};
@@ -35,7 +36,11 @@ async function clearSession(userId: number) {
   await cacheSet(`tg:session:${userId}`, {}, 1);
 }
 
-function mainMenu() {
+function replyMenuKeyboard() {
+  return new Keyboard().text(MENU_BTN).resized().persistent();
+}
+
+function mainMenuInline() {
   return new InlineKeyboard()
     .text("🎮 Steam", "menu:steam")
     .text("⭐ Premium", "menu:premium")
@@ -52,12 +57,82 @@ function paymentKeyboard(prefix: string) {
     const label = m.feeNote ? `${m.label} · ${m.feeNote}` : m.label;
     kb.text(label, `${prefix}:pay:${m.id}`).row();
   }
-  kb.text("« Назад", "menu:home");
+  kb.text("« Отмена", "menu:home");
+  return kb;
+}
+
+function usernamePickKeyboard(flow: "premium" | "stars", tgUsername?: string) {
+  const kb = new InlineKeyboard();
+  if (tgUsername) {
+    kb.text(`👤 Себе (@${tgUsername})`, `${flow}:username:me`).row();
+  }
+  kb.text("✏️ Ввести @username", `${flow}:username:manual`).row();
+  kb.text("« Отмена", "menu:home");
   return kb;
 }
 
 function normalizeUsername(raw: string): string {
   return raw.trim().replace(/^@/, "");
+}
+
+function isMenuButton(text: string): boolean {
+  return text.trim() === MENU_BTN;
+}
+
+async function showHome(ctx: Context, edit = false) {
+  if (!ctx.from) return;
+  await clearSession(ctx.from.id);
+  const text = "👋 <b>Zynqo</b>\n\nВыберите услугу:";
+  if (edit && ctx.callbackQuery?.message) {
+    await ctx.editMessageText(text, { parse_mode: "HTML", reply_markup: mainMenuInline() });
+    return;
+  }
+  await ctx.reply(text, {
+    parse_mode: "HTML",
+    reply_markup: mainMenuInline(),
+  });
+}
+
+async function proceedPremiumUsername(ctx: Context, username: string) {
+  if (!ctx.from) return;
+  const settings = await getPricingSettings();
+  const quote = await getTelegramPremiumQuote().catch(() => null);
+  const plans = quote?.plans ?? [];
+  if (plans.length === 0) {
+    await ctx.reply("Premium временно недоступен.", { reply_markup: mainMenuInline() });
+    return;
+  }
+  await saveSession(ctx.from.id, {
+    flow: "premium",
+    step: "plan",
+    data: { username },
+  });
+  const kb = new InlineKeyboard();
+  for (const p of plans) {
+    const priceRub = calculateRetailRub(parseFloat(p.price_usd), settings);
+    kb.text(`${p.months} мес. — ${formatRub(priceRub)}`, `premium:plan:${p.months}`).row();
+  }
+  kb.text("« Отмена", "menu:home");
+  await ctx.reply(`⭐ Premium → @${username}\n\nВыберите срок:`, { reply_markup: kb });
+}
+
+async function proceedStarsUsername(ctx: Context, username: string) {
+  if (!ctx.from) return;
+  await saveSession(ctx.from.id, {
+    flow: "stars",
+    step: "quantity",
+    data: { username },
+  });
+  await ctx.reply(`✨ Stars → @${username}\n\nВыберите количество или введите число (50–10000):`, {
+    reply_markup: new InlineKeyboard()
+      .text("50", "stars:qty:50")
+      .text("100", "stars:qty:100")
+      .text("500", "stars:qty:500")
+      .row()
+      .text("1000", "stars:qty:1000")
+      .row()
+      .text("« Отмена", "menu:home"),
+  });
 }
 
 async function createBotOrder(
@@ -88,20 +163,20 @@ async function start() {
   const bot = new Bot(token);
 
   bot.command("start", async (ctx) => {
-    await clearSession(ctx.from!.id);
-    await ctx.reply(
-      "👋 <b>Zynqo</b> — пополнение Steam, Telegram Premium и Stars.\n\nВыберите услугу:",
-      { parse_mode: "HTML", reply_markup: mainMenu() },
-    );
+    await ctx.reply("👋 Добро пожаловать в <b>Zynqo</b>!", {
+      parse_mode: "HTML",
+      reply_markup: replyMenuKeyboard(),
+    });
+    await showHome(ctx);
+  });
+
+  bot.command("menu", async (ctx) => {
+    await showHome(ctx);
   });
 
   bot.callbackQuery("menu:home", async (ctx) => {
     await ctx.answerCallbackQuery();
-    await clearSession(ctx.from!.id);
-    await ctx.editMessageText(
-      "👋 <b>Zynqo</b>\n\nВыберите услугу:",
-      { parse_mode: "HTML", reply_markup: mainMenu() },
-    );
+    await showHome(ctx, true);
   });
 
   bot.callbackQuery("menu:orders", async (ctx) => {
@@ -110,7 +185,7 @@ async function start() {
     const orders = await getOrdersByEmail(email, 5);
     if (orders.length === 0) {
       await ctx.reply("Заказов пока нет. Оформите первый через меню 👇", {
-        reply_markup: mainMenu(),
+        reply_markup: mainMenuInline(),
       });
       return;
     }
@@ -120,7 +195,7 @@ async function start() {
     );
     await ctx.reply(`<b>Последние заказы</b>\n${lines.join("\n")}`, {
       parse_mode: "HTML",
-      reply_markup: mainMenu(),
+      reply_markup: mainMenuInline(),
     });
   });
 
@@ -138,10 +213,35 @@ async function start() {
   bot.callbackQuery("menu:premium", async (ctx) => {
     await ctx.answerCallbackQuery();
     await saveSession(ctx.from!.id, { flow: "premium", step: "username", data: {} });
+    const tgUser = ctx.from?.username;
     await ctx.editMessageText(
-      "⭐ <b>Telegram Premium</b>\n\nОтправьте @username получателя:",
-      { parse_mode: "HTML", reply_markup: new InlineKeyboard().text("« Отмена", "menu:home") },
+      "⭐ <b>Telegram Premium</b>\n\nКому оформить подписку?",
+      {
+        parse_mode: "HTML",
+        reply_markup: usernamePickKeyboard("premium", tgUser),
+      },
     );
+  });
+
+  bot.callbackQuery("premium:username:me", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const username = ctx.from?.username;
+    if (!username) {
+      await ctx.reply(
+        "У вас не задан @username в Telegram.\nЗадайте его в настройках или нажмите «Ввести @username».",
+        { reply_markup: usernamePickKeyboard("premium") },
+      );
+      return;
+    }
+    await proceedPremiumUsername(ctx, username);
+  });
+
+  bot.callbackQuery("premium:username:manual", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await saveSession(ctx.from!.id, { flow: "premium", step: "username", data: {} });
+    await ctx.reply("✏️ Отправьте @username получателя сообщением:", {
+      reply_markup: new InlineKeyboard().text("« Отмена", "menu:home"),
+    });
   });
 
   bot.callbackQuery(/^premium:plan:(3|6|12)$/, async (ctx) => {
@@ -150,7 +250,7 @@ async function start() {
     const session = await loadSession(ctx.from!.id);
     const username = String(session.data?.username ?? "");
     if (!username) {
-      await ctx.reply("Сессия истекла. /start");
+      await ctx.reply("Сессия истекла. Нажмите «Главное меню» или /start");
       return;
     }
     const settings = await getPricingSettings();
@@ -175,7 +275,7 @@ async function start() {
     const username = String(session.data?.username ?? "");
     const months = Number(session.data?.months) as 3 | 6 | 12;
     if (!username || ![3, 6, 12].includes(months)) {
-      await ctx.reply("Сессия истекла. /start");
+      await ctx.reply("Сессия истекла. Нажмите «Главное меню» или /start");
       return;
     }
     await ctx.reply("⏳ Создаём заказ…");
@@ -186,6 +286,10 @@ async function start() {
         telegramUsername: username,
         months,
       });
+      if (!result.paymentUrl) {
+        await ctx.reply("Не удалось получить ссылку на оплату. Попробуйте позже.");
+        return;
+      }
       await clearSession(ctx.from!.id);
       const method = getFreekassaMethod(paymentMethodId);
       await ctx.reply(
@@ -194,7 +298,7 @@ async function start() {
           `👇 Нажмите для оплаты:`,
         {
           parse_mode: "HTML",
-          reply_markup: new InlineKeyboard().url("💳 Оплатить", result.paymentUrl!),
+          reply_markup: new InlineKeyboard().url("💳 Оплатить", result.paymentUrl),
         },
       );
     } catch (err) {
@@ -207,10 +311,35 @@ async function start() {
   bot.callbackQuery("menu:stars", async (ctx) => {
     await ctx.answerCallbackQuery();
     await saveSession(ctx.from!.id, { flow: "stars", step: "username", data: {} });
+    const tgUser = ctx.from?.username;
     await ctx.editMessageText(
-      "✨ <b>Telegram Stars</b>\n\nОтправьте @username получателя:",
-      { parse_mode: "HTML", reply_markup: new InlineKeyboard().text("« Отмена", "menu:home") },
+      "✨ <b>Telegram Stars</b>\n\nКому отправить Stars?",
+      {
+        parse_mode: "HTML",
+        reply_markup: usernamePickKeyboard("stars", tgUser),
+      },
     );
+  });
+
+  bot.callbackQuery("stars:username:me", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const username = ctx.from?.username;
+    if (!username) {
+      await ctx.reply(
+        "У вас не задан @username в Telegram.\nЗадайте его в настройках или нажмите «Ввести @username».",
+        { reply_markup: usernamePickKeyboard("stars") },
+      );
+      return;
+    }
+    await proceedStarsUsername(ctx, username);
+  });
+
+  bot.callbackQuery("stars:username:manual", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await saveSession(ctx.from!.id, { flow: "stars", step: "username", data: {} });
+    await ctx.reply("✏️ Отправьте @username получателя сообщением:", {
+      reply_markup: new InlineKeyboard().text("« Отмена", "menu:home"),
+    });
   });
 
   bot.callbackQuery(/^stars:pay:(\d+)$/, async (ctx) => {
@@ -220,7 +349,7 @@ async function start() {
     const username = String(session.data?.username ?? "");
     const quantity = Number(session.data?.quantity ?? 0);
     if (!username || quantity < 50) {
-      await ctx.reply("Сессия истекла. /start");
+      await ctx.reply("Сессия истекла. Нажмите «Главное меню» или /start");
       return;
     }
     await ctx.reply("⏳ Создаём заказ…");
@@ -231,6 +360,10 @@ async function start() {
         telegramUsername: username,
         quantity,
       });
+      if (!result.paymentUrl) {
+        await ctx.reply("Не удалось получить ссылку на оплату.");
+        return;
+      }
       await clearSession(ctx.from!.id);
       const method = getFreekassaMethod(paymentMethodId);
       await ctx.reply(
@@ -239,7 +372,7 @@ async function start() {
           `Оплата: <b>${method?.label ?? "Freekassa"}</b>`,
         {
           parse_mode: "HTML",
-          reply_markup: new InlineKeyboard().url("💳 Оплатить", result.paymentUrl!),
+          reply_markup: new InlineKeyboard().url("💳 Оплатить", result.paymentUrl),
         },
       );
     } catch (err) {
@@ -255,7 +388,7 @@ async function start() {
     const login = String(session.data?.login ?? "");
     const walletAmountRub = Number(session.data?.walletAmountRub ?? 0);
     if (!login || walletAmountRub < 100) {
-      await ctx.reply("Сессия истекла. /start");
+      await ctx.reply("Сессия истекла. Нажмите «Главное меню» или /start");
       return;
     }
     await ctx.reply("⏳ Создаём заказ…");
@@ -266,6 +399,10 @@ async function start() {
         steamLogin: login,
         walletAmountRub,
       });
+      if (!result.paymentUrl) {
+        await ctx.reply("Не удалось получить ссылку на оплату.");
+        return;
+      }
       await clearSession(ctx.from!.id);
       const method = getFreekassaMethod(paymentMethodId);
       await ctx.reply(
@@ -274,7 +411,7 @@ async function start() {
           `Оплата: <b>${method?.label ?? "Freekassa"}</b>`,
         {
           parse_mode: "HTML",
-          reply_markup: new InlineKeyboard().url("💳 Оплатить", result.paymentUrl!),
+          reply_markup: new InlineKeyboard().url("💳 Оплатить", result.paymentUrl),
         },
       );
     } catch (err) {
@@ -287,8 +424,14 @@ async function start() {
   bot.on("message:text", async (ctx) => {
     if (!ctx.from || ctx.message.text.startsWith("/")) return;
 
-    const session = await loadSession(ctx.from.id);
     const text = ctx.message.text.trim();
+
+    if (isMenuButton(text)) {
+      await showHome(ctx);
+      return;
+    }
+
+    const session = await loadSession(ctx.from.id);
 
     if (session.flow === "steam" && session.step === "login") {
       const login = text.replace(/\s/g, "");
@@ -350,25 +493,11 @@ async function start() {
 
     if (session.flow === "premium" && session.step === "username") {
       const username = normalizeUsername(text);
-      const settings = await getPricingSettings();
-      const quote = await getTelegramPremiumQuote().catch(() => null);
-      const plans = quote?.plans ?? [];
-      if (plans.length === 0) {
-        await ctx.reply("Premium временно недоступен.");
+      if (!username || username.length < 3) {
+        await ctx.reply("Укажите корректный @username (минимум 3 символа).");
         return;
       }
-      await saveSession(ctx.from.id, {
-        flow: "premium",
-        step: "plan",
-        data: { username },
-      });
-      const kb = new InlineKeyboard();
-      for (const p of plans) {
-        const priceRub = calculateRetailRub(parseFloat(p.price_usd), settings);
-        kb.text(`${p.months} мес. — ${formatRub(priceRub)}`, `premium:plan:${p.months}`).row();
-      }
-      kb.text("« Отмена", "menu:home");
-      await ctx.reply(`@${username}\n\nВыберите срок Premium:`, { reply_markup: kb });
+      await proceedPremiumUsername(ctx, username);
       return;
     }
 
@@ -378,22 +507,11 @@ async function start() {
 
     if (session.flow === "stars" && session.step === "username") {
       const username = normalizeUsername(text);
-      await saveSession(ctx.from.id, {
-        flow: "stars",
-        step: "quantity",
-        data: { username },
-      });
-      await ctx.reply(
-        `@${username}\n\nВведите количество Stars (50–10000):`,
-        {
-          reply_markup: new InlineKeyboard()
-            .text("50", "stars:qty:50")
-            .text("100", "stars:qty:100")
-            .text("500", "stars:qty:500")
-            .row()
-            .text("1000", "stars:qty:1000"),
-        },
-      );
+      if (!username || username.length < 3) {
+        await ctx.reply("Укажите корректный @username (минимум 3 символа).");
+        return;
+      }
+      await proceedStarsUsername(ctx, username);
       return;
     }
 
@@ -419,6 +537,12 @@ async function start() {
           "Выберите способ оплаты:",
         { parse_mode: "HTML", reply_markup: paymentKeyboard("stars") },
       );
+      return;
+    }
+
+    // Нет активного шага — подсказка
+    if (!session.flow) {
+      await ctx.reply("Выберите услугу в меню 👇", { reply_markup: mainMenuInline() });
     }
   });
 
