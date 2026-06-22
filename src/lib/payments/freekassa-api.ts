@@ -5,27 +5,10 @@ import { getFreekassaUrls } from "@/lib/payments/freekassa";
 
 const FREEKASSA_API_URL = "https://api.fk.life/v1/orders/create";
 
-/** Официальная форма оплаты Freekassa (docs.freekassa.net → orders/create). */
 const FREEKASSA_PAY_FORM_BASE = "https://pay.freekassa.net/form";
-
-/** Домены формы оплаты Freekassa. fmt.me / fkwallet — кошелёк, не используем. */
-const TRUSTED_FREEKASSA_PAY_HOSTS = new Set([
-  "pay.freekassa.net",
-  "pay.fk.money",
-  "pay.fk.life",
-]);
 
 function buildFreekassaPayFormUrl(orderId: number, orderHash: string): string {
   return `${FREEKASSA_PAY_FORM_BASE}/${orderId}/${orderHash}`;
-}
-
-function isTrustedFreekassaPayUrl(url: string): boolean {
-  try {
-    const host = new URL(url).hostname.toLowerCase();
-    return TRUSTED_FREEKASSA_PAY_HOSTS.has(host);
-  } catch {
-    return false;
-  }
 }
 
 function resolvePaymentUrl(

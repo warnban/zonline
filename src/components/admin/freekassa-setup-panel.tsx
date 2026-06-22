@@ -42,10 +42,16 @@ export function FreekassaSetupPanel() {
             <code>FREEKASSA_API_KEY</code> — обязателен для СБП (44) и карт (36)
           </li>
           <li>
+            <code>FREEKASSA_MERCHANT_ID</code> — ID магазина
+          </li>
+          <li>
+            <code>FREEKASSA_SECRET_2</code> — подпись вебхука (ответ YES)
+          </li>
+          <li>
             <code>FREEKASSA_SECRET_1</code> — опционально, для SCI (крипта)
           </li>
           <li>
-            <code>FREEKASSA_CLIENT_IP</code> — IP сервера для API fallback
+            <code>FREEKASSA_CLIENT_IP</code> — IP сервера для API
           </li>
         </ul>
         {fk.missing.length > 0 && (
