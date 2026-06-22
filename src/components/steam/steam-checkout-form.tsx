@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { formatRub } from "@/lib/pricing";
+import { calculateSteamPaymentRub, formatRub } from "@/lib/pricing";
 import { ValidationHint, type ValidationStatus } from "@/components/checkout/validation-hint";
 import type { SteamRates } from "@/lib/fazercards/catalog";
 import type { PricingSettings } from "@/lib/settings";
@@ -23,13 +23,11 @@ export function SteamCheckoutForm({ rates, settings, heading = "Пополнен
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
   const walletRub = parseInt(amount, 10) || 0;
-  const feePct = settings.defaultMarkupPct + settings.steamCommissionPct;
 
   const payment = useMemo(() => {
     if (walletRub <= 0) return null;
-    const totalRub = Math.ceil(walletRub * (1 + feePct / 100));
-    return { walletRub, feeRub: totalRub - walletRub, totalRub, feePct };
-  }, [walletRub, feePct]);
+    return calculateSteamPaymentRub(walletRub, settings);
+  }, [walletRub, settings]);
 
   async function checkLogin() {
     if (!login.trim()) return;

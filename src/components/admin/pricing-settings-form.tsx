@@ -57,7 +57,7 @@ export function PricingSettingsForm({
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-muted">Наценка, %</label>
+        <label className="mb-1 block text-xs text-muted">Наценка, % (кроме Steam)</label>
         <input
           className="input"
           type="number"
