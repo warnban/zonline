@@ -22,9 +22,13 @@ const ibmPlex = IBM_Plex_Sans({
 });
 
 const YANDEX_VERIFICATION_CODE = "793e591384e240ce";
+const GOOGLE_VERIFICATION_CODE = "S1AAUiX0QMWaMnfDjRmv2El0qCXOFGhZnYO5FhZ9dbg";
 
 const yandexVerification =
   process.env.YANDEX_VERIFICATION?.trim() || YANDEX_VERIFICATION_CODE;
+
+const googleVerification =
+  process.env.GOOGLE_SITE_VERIFICATION?.trim() || GOOGLE_VERIFICATION_CODE;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -55,9 +59,7 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
   verification: {
     yandex: yandexVerification,
-    ...(process.env.GOOGLE_SITE_VERIFICATION
-      ? { google: process.env.GOOGLE_SITE_VERIFICATION }
-      : {}),
+    google: googleVerification,
   },
 };
 
@@ -70,6 +72,7 @@ export default function RootLayout({
     <html lang="ru" className="dark" suppressHydrationWarning>
       <head>
         <meta name="yandex-verification" content={yandexVerification} />
+        <meta name="google-site-verification" content={googleVerification} />
       </head>
       <body
         className={`${onest.variable} ${ibmPlex.variable} min-h-screen antialiased`}
