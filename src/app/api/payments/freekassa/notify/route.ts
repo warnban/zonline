@@ -13,6 +13,24 @@ import {
 
 export const runtime = "nodejs";
 
+async function findOrderByFreekassaPaymentId(merchantOrderId: string) {
+  const byPayment = await db.order.findFirst({
+    where: { paymentId: merchantOrderId },
+    include: { payment: true },
+  });
+  if (byPayment) return byPayment;
+
+  const payment = await db.payment.findUnique({
+    where: { id: merchantOrderId },
+    include: { order: true },
+  });
+  if (payment?.order) {
+    return { ...payment.order, payment };
+  }
+
+  return null;
+}
+
 function clientIp(request: NextRequest): string {
   return (
     request.headers.get("x-real-ip") ??
@@ -82,10 +100,12 @@ async function handleNotify(request: NextRequest) {
     return new NextResponse("wrong sign", { status: 403 });
   }
 
-  const order = await db.order.findFirst({
-    where: { publicId: notification.merchantOrderId },
-    include: { payment: true },
-  });
+  const order =
+    (await findOrderByFreekassaPaymentId(notification.merchantOrderId)) ??
+    (await db.order.findFirst({
+      where: { publicId: notification.merchantOrderId },
+      include: { payment: true },
+    }));
 
   if (!order) {
     await db.webhookLog.update({

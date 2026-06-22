@@ -48,7 +48,7 @@ export async function createOrderWithPayment(input: CreateOrderParams) {
   let paymentUrl: string | null = null;
   if (isFreekassaConfigured()) {
     const fk = await createFreekassaCheckout({
-      paymentId: result.order.publicId,
+      paymentId: result.payment.id,
       amountRub: Number(result.order.amountRub),
       email: result.order.email,
       ip: input.clientIp ?? "127.0.0.1",

@@ -21,7 +21,7 @@ export type FreekassaUrls = {
   notify: string;
   success: string;
   fail: string;
-  notifyMethod: "POST";
+  notifyMethod: "GET" | "POST";
   successMethod: "GET";
   failMethod: "GET";
 };
@@ -30,15 +30,7 @@ export function isFreekassaNotifyConfigured(): boolean {
   return Boolean(env.FREEKASSA_MERCHANT_ID?.trim() && env.FREEKASSA_SECRET_2?.trim());
 }
 
-/** Прямая оплата СБП/карта/крипта — форма SCI https://pay.fk.money/ (docs §1.3). */
-export function isFreekassaSciConfigured(): boolean {
-  return Boolean(
-    env.FREEKASSA_MERCHANT_ID?.trim() &&
-      env.FREEKASSA_SECRET_1?.trim() &&
-      isFreekassaNotifyConfigured(),
-  );
-}
-
+/** Только API orders/create (как selfvpn). */
 export function isFreekassaApiConfigured(): boolean {
   return Boolean(
     env.FREEKASSA_API_KEY?.trim() &&
@@ -47,35 +39,36 @@ export function isFreekassaApiConfigured(): boolean {
   );
 }
 
-/** Можно принимать платежи (SCI предпочтительнее — без редиректа в FK Wallet). */
 export function isFreekassaConfigured(): boolean {
-  return isFreekassaSciConfigured() || isFreekassaApiConfigured();
+  return isFreekassaApiConfigured();
+}
+
+/** SCI — legacy, не используется для checkout (selfvpn тоже только API). */
+export function isFreekassaSciConfigured(): boolean {
+  return Boolean(
+    env.FREEKASSA_MERCHANT_ID?.trim() &&
+      env.FREEKASSA_SECRET_1?.trim() &&
+      isFreekassaNotifyConfigured(),
+  );
 }
 
 /** Для диагностики — какие переменные не заданы (без значений). */
 export function getFreekassaConfigStatus(): {
   configured: boolean;
-  paymentMode: "sci" | "api" | "none";
+  paymentMode: "api" | "none";
   missing: string[];
 } {
   const missing: string[] = [];
   if (!env.FREEKASSA_MERCHANT_ID?.trim()) missing.push("FREEKASSA_MERCHANT_ID");
   if (!env.FREEKASSA_SECRET_2?.trim()) missing.push("FREEKASSA_SECRET_2");
-
-  const hasSci = Boolean(env.FREEKASSA_SECRET_1?.trim());
-  const hasApi = Boolean(env.FREEKASSA_API_KEY?.trim());
-
-  if (!hasSci && !hasApi) {
-    missing.push("FREEKASSA_API_KEY (обязателен для СБП/карт)");
+  if (!env.FREEKASSA_API_KEY?.trim()) missing.push("FREEKASSA_API_KEY");
+  if (!env.FREEKASSA_CLIENT_IP?.trim()) {
+    missing.push("FREEKASSA_CLIENT_IP (fallback IP для API)");
   }
 
-  let paymentMode: "sci" | "api" | "none" = "none";
-  if (isFreekassaApiConfigured()) paymentMode = "api";
-  else if (isFreekassaSciConfigured()) paymentMode = "sci";
-
   return {
-    configured: isFreekassaConfigured(),
-    paymentMode,
+    configured: isFreekassaApiConfigured(),
+    paymentMode: isFreekassaApiConfigured() ? "api" : "none",
     missing,
   };
 }
@@ -86,7 +79,7 @@ export function getFreekassaUrls(baseUrl = env.APP_URL): FreekassaUrls {
     notify: `${base}${FREEKASSA_PATHS.notify}`,
     success: `${base}${FREEKASSA_PATHS.success}`,
     fail: `${base}${FREEKASSA_PATHS.fail}`,
-    notifyMethod: "POST",
+    notifyMethod: "GET",
     successMethod: "GET",
     failMethod: "GET",
   };

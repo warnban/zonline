@@ -1,30 +1,10 @@
 import { createHmac } from "node:crypto";
 import { env } from "@/lib/env";
-import { redis } from "@/lib/redis";
 import { getFreekassaUrls } from "@/lib/payments/freekassa";
+import { isValidFreekassaMethodId } from "@/lib/payments/freekassa-methods";
 
+/** Как в selfvpn: bot/services/freekassa.py */
 const FREEKASSA_API_URL = "https://api.fk.life/v1/orders/create";
-
-const FREEKASSA_PAY_FORM_BASE = "https://pay.freekassa.net/form";
-
-function buildFreekassaPayFormUrl(orderId: number, orderHash: string): string {
-  return `${FREEKASSA_PAY_FORM_BASE}/${orderId}/${orderHash}`;
-}
-
-function resolvePaymentUrl(
-  json: { location?: string; orderId?: number; orderHash?: string },
-  headerLocation: string | null,
-): string {
-  // По докам: location — ссылка для клиента (может быть fmt.me, pay.freekassa.net и т.д.)
-  const location = json.location?.trim() || headerLocation?.trim();
-  if (location) return location;
-
-  if (json.orderId && json.orderHash) {
-    return buildFreekassaPayFormUrl(json.orderId, json.orderHash);
-  }
-
-  return "";
-}
 
 export type CreateFreekassaApiOrderInput = {
   paymentId: string;
@@ -41,35 +21,39 @@ export type CreateFreekassaApiOrderResult = {
   orderHash?: string;
 };
 
+/** Всегда 2 знака после запятой — как selfvpn format_amount(). */
 function formatAmount(rub: number): string {
-  if (Number.isInteger(rub)) return String(rub);
   return rub.toFixed(2);
 }
 
-function signPayload(data: Record<string, string | number>, apiKey: string): string {
+function signApiRequest(data: Record<string, string | number>): string {
+  const apiKey = env.FREEKASSA_API_KEY!;
   const sorted = Object.keys(data).sort();
   const line = sorted.map((k) => String(data[k])).join("|");
   return createHmac("sha256", apiKey).update(line).digest("hex");
 }
 
-async function nextNonce(): Promise<number> {
-  const ts = Date.now();
-  if (redis) {
-    try {
-      const n = await redis.incr("freekassa:nonce");
-      return Math.max(n, ts);
-    } catch {
-      // fallback
-    }
+function paymentLocationFromResponse(body: {
+  location?: string;
+  Location?: string;
+  orderId?: number;
+  orderHash?: string;
+}): string {
+  const location = String(body.location ?? body.Location ?? "").trim();
+  if (location) return location;
+
+  if (body.orderId && body.orderHash) {
+    return `https://pay.freekassa.net/form/${body.orderId}/${body.orderHash}`;
   }
-  return ts;
+
+  return "";
 }
 
 export function resolveFreekassaClientIp(requestIp?: string): string {
   const ip = requestIp?.trim();
-  if (ip && ip !== "127.0.0.1" && ip !== "::1") return ip;
+  if (ip && ip !== "127.0.0.1" && ip !== "::1" && ip !== "0.0.0.0") return ip;
   if (env.FREEKASSA_CLIENT_IP) return env.FREEKASSA_CLIENT_IP;
-  return "85.8.8.8";
+  return "109.73.193.87";
 }
 
 export async function createFreekassaApiOrder(
@@ -81,65 +65,65 @@ export async function createFreekassaApiOrder(
     throw new Error("Freekassa API is not configured");
   }
 
-  const urls = getFreekassaUrls();
-  const nonce = await nextNonce();
-  const amount = formatAmount(input.amountRub);
-  const currency = input.currency ?? "RUB";
-  const ip = resolveFreekassaClientIp(input.ip);
+  if (!isValidFreekassaMethodId(input.paymentMethodId)) {
+    throw new Error(`Unsupported Freekassa payment method: ${input.paymentMethodId}`);
+  }
 
-  const payload: Record<string, string | number> = {
+  const urls = getFreekassaUrls();
+  const data: Record<string, string | number> = {
     shopId: Number(shopId),
-    nonce,
+    nonce: Date.now(),
     paymentId: input.paymentId,
     i: input.paymentMethodId,
     email: input.email,
-    ip,
-    amount,
-    currency,
+    ip: resolveFreekassaClientIp(input.ip),
+    amount: formatAmount(input.amountRub),
+    currency: input.currency ?? "RUB",
     success_url: urls.success,
     failure_url: urls.fail,
     notification_url: urls.notify,
   };
 
-  payload.signature = signPayload(payload, apiKey);
+  const signature = signApiRequest(data);
+  const requestBody = { ...data, signature };
 
   const res = await fetch(FREEKASSA_API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(requestBody),
   });
 
   const text = await res.text();
-  let json: {
+  let body: {
     type?: string;
     location?: string;
+    Location?: string;
     orderId?: number;
     orderHash?: string;
     message?: string;
+    error?: string;
     data?: { message?: string };
   } = {};
 
   try {
-    json = JSON.parse(text) as typeof json;
+    body = JSON.parse(text) as typeof body;
   } catch {
-    throw new Error(`Freekassa API invalid response: ${text.slice(0, 200)}`);
+    throw new Error(`Freekassa API invalid JSON: ${text.slice(0, 200)}`);
   }
 
-  if (!res.ok || json.type !== "success") {
-    const msg = json.message ?? json.data?.message ?? text.slice(0, 300);
+  if (res.status >= 400 || body.type !== "success") {
+    const msg = body.message ?? body.error ?? body.data?.message ?? `HTTP ${res.status}`;
     throw new Error(`Freekassa API error: ${msg}`);
   }
 
-  const headerLocation = res.headers.get("location");
-  const paymentUrl = resolvePaymentUrl(json, headerLocation);
-
+  const paymentUrl = paymentLocationFromResponse(body);
   if (!paymentUrl) {
-    throw new Error("Freekassa API: missing payment URL");
+    throw new Error(`Freekassa did not return payment URL: ${text.slice(0, 300)}`);
   }
 
   return {
     paymentUrl,
-    fkOrderId: json.orderId,
-    orderHash: json.orderHash,
+    fkOrderId: body.orderId,
+    orderHash: body.orderHash,
   };
 }

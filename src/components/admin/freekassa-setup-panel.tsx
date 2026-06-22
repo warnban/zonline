@@ -27,11 +27,9 @@ export function FreekassaSetupPanel() {
         {" · "}
         Режим оплаты:{" "}
         <span className="font-medium text-foreground">
-          {fk.paymentMode === "sci"
-            ? "SCI (крипта)"
-            : fk.paymentMode === "api"
-              ? "API (СБП/карты — orders/create)"
-              : "не настроено"}
+          {fk.paymentMode === "api"
+            ? "API orders/create (как selfvpn)"
+            : "не настроено"}
         </span>
       </p>
 
@@ -48,10 +46,7 @@ export function FreekassaSetupPanel() {
             <code>FREEKASSA_SECRET_2</code> — подпись вебхука (ответ YES)
           </li>
           <li>
-            <code>FREEKASSA_SECRET_1</code> — опционально, для SCI (крипта)
-          </li>
-          <li>
-            <code>FREEKASSA_CLIENT_IP</code> — IP сервера для API
+            <code>FREEKASSA_CLIENT_IP</code> — IP сервера для API (как FREEKASSA_CLIENT_IP_FALLBACK в selfvpn)
           </li>
         </ul>
         {fk.missing.length > 0 && (
