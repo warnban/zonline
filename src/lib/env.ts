@@ -11,6 +11,13 @@ const envSchema = z.object({
   FREEKASSA_MERCHANT_ID: z.string().optional(),
   FREEKASSA_SECRET_1: z.string().optional(),
   FREEKASSA_SECRET_2: z.string().optional(),
+  /** API-ключ Freekassa (https://merchant.freekassa.net/settings) */
+  FREEKASSA_API_KEY: z.string().optional(),
+  /** IP сервера для запросов FK API (127.0.0.1 блокируется) */
+  FREEKASSA_CLIENT_IP: z.string().optional(),
+  /** Telegram-бот Zynqo */
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_BOT_USERNAME: z.string().optional(),
   APP_URL: z.string().default("http://localhost:3000"),
   /** Курс USD→RUB (пересчёт оптовой цены, не наценка) */
   USD_RUB_RATE: z.coerce.number().default(92),

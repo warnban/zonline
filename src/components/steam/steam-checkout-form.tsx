@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { PaymentMethodPicker } from "@/components/payments/payment-method-picker";
 import { calculateSteamPaymentRub, formatRub } from "@/lib/pricing";
+import { DEFAULT_FREEKASSA_METHOD_ID } from "@/lib/payments/freekassa-methods";
 import { ValidationHint, type ValidationStatus } from "@/components/checkout/validation-hint";
 import type { SteamRates } from "@/lib/fazercards/catalog";
 import type { PricingSettings } from "@/lib/settings";
@@ -21,6 +23,7 @@ export function SteamCheckoutForm({ rates, settings, heading = "Пополнен
   const [error, setError] = useState<string | null>(null);
   const [validationStatus, setValidationStatus] = useState<ValidationStatus>("idle");
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [paymentMethodId, setPaymentMethodId] = useState(DEFAULT_FREEKASSA_METHOD_ID);
 
   const walletRub = parseInt(amount, 10) || 0;
 
@@ -75,6 +78,7 @@ export function SteamCheckoutForm({ rates, settings, heading = "Пополнен
           email: email.trim(),
           steamLogin: login.trim(),
           walletAmountRub: walletRub,
+          paymentMethodId,
         }),
       });
       const data = await res.json();
@@ -167,6 +171,14 @@ export function SteamCheckoutForm({ rates, settings, heading = "Пополнен
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@mail.ru"
+          />
+        </div>
+
+        <div className="card p-4">
+          <PaymentMethodPicker
+            value={paymentMethodId}
+            onChange={setPaymentMethodId}
+            amountRub={payment?.totalRub}
           />
         </div>
 

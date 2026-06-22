@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { fulfillOrderAtFazer } from "@/lib/orders/fulfill-fazer";
 import { sendOrderStatusEmail } from "@/lib/email/send";
+import { notifyTelegramOrderPaid } from "@/lib/telegram/notify";
 import {
   amountsMatch,
   isFreekassaNotifyIp,
@@ -122,6 +123,7 @@ async function handleNotify(request: NextRequest) {
       data: { status: "PAID" },
     });
     await sendOrderStatusEmail(paid).catch(console.error);
+    await notifyTelegramOrderPaid(paid).catch(console.error);
   }
 
   const fresh = await db.order.findUnique({ where: { id: order.id } });

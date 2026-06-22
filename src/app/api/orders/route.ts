@@ -1,102 +1,18 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import {
-  checkSteamLogin,
-  getGiftCardOffers,
-  getTelegramPremiumQuote,
-  getTelegramStarsQuote,
-  getTopupOffers,
-  getGameKeyOffers,
-  getSteamRates,
-} from "@/lib/fazercards/catalog";
-import { isFazerConfigured } from "@/lib/fazercards/client";
-import { buildOrderFromBody } from "@/lib/orders/build-order";
-import { createOrderWithPayment } from "@/lib/orders/create";
+import type { NextRequest } from "next/server";
+import { placeOrder } from "@/lib/orders/place-order";
 import { createOrderSchema } from "@/lib/orders/schemas";
-import { getPricingSettings } from "@/lib/settings";
-import {
-  calculateRetailRub,
-  calculateSteamPaymentRub,
-  steamWalletRubToWholesaleUsd,
-} from "@/lib/pricing";
+import { resolveFreekassaClientIp } from "@/lib/payments/freekassa-api";
+import { DEFAULT_FREEKASSA_METHOD_ID } from "@/lib/payments/freekassa-methods";
 
-async function resolvePricing(body: z.infer<typeof createOrderSchema>) {
-  const settings = await getPricingSettings();
-
-  switch (body.type) {
-    case "STEAM": {
-      const loginCheck = await checkSteamLogin(body.steamLogin.trim());
-      if (!loginCheck.can_refill) {
-        throw new Error("STEAM_LOGIN_INVALID");
-      }
-      const { totalRub } = calculateSteamPaymentRub(body.walletAmountRub, settings);
-      const rates = await getSteamRates();
-      const rubPerUsd = rates?.rates?.RUB ?? settings.usdRubRate;
-      return {
-        totalAmountRub: totalRub,
-        amountUsd: steamWalletRubToWholesaleUsd(body.walletAmountRub, rubPerUsd),
-      };
-    }
-    case "TELEGRAM_STARS": {
-      const quote = await getTelegramStarsQuote();
-      const pricePerStar = parseFloat(quote.price_per_star);
-      const amountUsd = pricePerStar * body.quantity;
-      return {
-        totalAmountRub: calculateRetailRub(amountUsd, settings),
-        amountUsd,
-      };
-    }
-    case "TELEGRAM_PREMIUM": {
-      const quote = await getTelegramPremiumQuote();
-      const plan = quote.plans.find((p) => p.months === body.months);
-      if (!plan) throw new Error("PLAN_NOT_FOUND");
-      const amountUsd = parseFloat(plan.price_usd);
-      return {
-        totalAmountRub: calculateRetailRub(amountUsd, settings),
-        amountUsd,
-      };
-    }
-    case "GIFT_CARD": {
-      const offers = await getGiftCardOffers(body.categoryId);
-      const offer = offers.items?.find((o) => String(o.card_id) === body.cardId);
-      if (!offer) throw new Error("OFFER_NOT_FOUND");
-      const amountUsd = parseFloat(String(offer.price_usd ?? "0"));
-      if (!amountUsd) throw new Error("OFFER_PRICE_INVALID");
-      return {
-        totalAmountRub: calculateRetailRub(amountUsd, settings),
-        amountUsd,
-      };
-    }
-    case "TOPUP": {
-      const offers = await getTopupOffers(body.categoryId);
-      const offer = offers.items?.find((o) => String(o.offer_id) === body.offerId);
-      if (!offer) throw new Error("OFFER_NOT_FOUND");
-      const amountUsd = parseFloat(String(offer.price_usd ?? "0"));
-      if (!amountUsd) throw new Error("OFFER_PRICE_INVALID");
-      return {
-        totalAmountRub: calculateRetailRub(amountUsd, settings),
-        amountUsd,
-      };
-    }
-    case "GAME_KEY": {
-      const offers = await getGameKeyOffers(body.categoryId);
-      const offer = offers.items?.find((o) => String(o.card_id) === body.cardId);
-      if (!offer) throw new Error("OFFER_NOT_FOUND");
-      const amountUsd = parseFloat(String(offer.price_usd ?? "0"));
-      if (!amountUsd) throw new Error("OFFER_PRICE_INVALID");
-      return {
-        totalAmountRub: calculateRetailRub(amountUsd, settings),
-        amountUsd,
-      };
-    }
-  }
+function clientIp(request: NextRequest): string {
+  const raw =
+    request.headers.get("x-real-ip") ??
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return resolveFreekassaClientIp(raw ?? undefined);
 }
 
-export async function POST(request: Request) {
-  if (!isFazerConfigured()) {
-    return NextResponse.json({ error: "Сервис временно недоступен" }, { status: 503 });
-  }
-
+export async function POST(request: NextRequest) {
   let raw: unknown;
   try {
     raw = await request.json();
@@ -110,17 +26,19 @@ export async function POST(request: Request) {
   }
 
   const body = parsed.data;
+  const paymentMethodId =
+    typeof raw === "object" &&
+    raw !== null &&
+    "paymentMethodId" in raw &&
+    typeof (raw as { paymentMethodId: unknown }).paymentMethodId === "number"
+      ? (raw as { paymentMethodId: number }).paymentMethodId
+      : DEFAULT_FREEKASSA_METHOD_ID;
 
   try {
-    const pricing = await resolvePricing(body);
-    const built = buildOrderFromBody(body);
-
-    const result = await createOrderWithPayment({
-      orderType: built.orderType,
-      email: body.email,
-      totalAmountRub: pricing.totalAmountRub,
-      amountUsd: pricing.amountUsd,
-      metadata: built.metadata,
+    const result = await placeOrder(body, {
+      clientIp: clientIp(request),
+      paymentMethodId,
+      extraMetadata: { source: "web" },
     });
 
     if (!result.paymentUrl) {
@@ -138,6 +56,9 @@ export async function POST(request: Request) {
     }
     if (msg === "OFFER_NOT_FOUND") {
       return NextResponse.json({ error: "Product not available" }, { status: 404 });
+    }
+    if (msg === "FAZER_NOT_CONFIGURED") {
+      return NextResponse.json({ error: "Сервис временно недоступен" }, { status: 503 });
     }
     console.error("[orders]", err);
     return NextResponse.json({ error: "Failed to create order" }, { status: 502 });

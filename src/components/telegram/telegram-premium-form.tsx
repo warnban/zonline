@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useCreateOrder } from "@/components/checkout/use-create-order";
+import { PaymentMethodPicker } from "@/components/payments/payment-method-picker";
+import { DEFAULT_FREEKASSA_METHOD_ID } from "@/lib/payments/freekassa-methods";
 import { PremiumRestrictionsNotice } from "@/components/telegram/premium-restrictions-notice";
 import { TelegramUsernameField } from "@/components/telegram/telegram-username-field";
 
@@ -16,6 +18,7 @@ export function TelegramPremiumForm({ heading, plans }: Props) {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [months, setMonths] = useState(plans[0]?.months ?? 3);
+  const [paymentMethodId, setPaymentMethodId] = useState(DEFAULT_FREEKASSA_METHOD_ID);
   const { pay, loading, error } = useCreateOrder();
   const selected = plans.find((p) => p.months === months);
 
@@ -26,6 +29,7 @@ export function TelegramPremiumForm({ heading, plans }: Props) {
       email: email.trim(),
       telegramUsername: username.trim(),
       months: selected.months,
+      paymentMethodId,
     });
   }
 
@@ -70,6 +74,13 @@ export function TelegramPremiumForm({ heading, plans }: Props) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@mail.ru"
+          />
+        </div>
+        <div className="card p-4">
+          <PaymentMethodPicker
+            value={paymentMethodId}
+            onChange={setPaymentMethodId}
+            amountRub={selected?.priceRub}
           />
         </div>
         <aside className="card p-5">

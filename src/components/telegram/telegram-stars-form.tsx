@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { useCreateOrder } from "@/components/checkout/use-create-order";
 import { TelegramUsernameField } from "@/components/telegram/telegram-username-field";
+import { PaymentMethodPicker } from "@/components/payments/payment-method-picker";
+import { DEFAULT_FREEKASSA_METHOD_ID } from "@/lib/payments/freekassa-methods";
 import { formatRub } from "@/lib/pricing";
 
 type Props = {
@@ -23,6 +25,7 @@ export function TelegramStarsForm({
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [quantity, setQuantity] = useState(String(minAmount));
+  const [paymentMethodId, setPaymentMethodId] = useState(DEFAULT_FREEKASSA_METHOD_ID);
   const { pay, loading, error } = useCreateOrder();
 
   const qty = parseInt(quantity, 10) || 0;
@@ -38,6 +41,7 @@ export function TelegramStarsForm({
       email: email.trim(),
       telegramUsername: username.trim(),
       quantity: qty,
+      paymentMethodId,
     });
   }
 
@@ -60,6 +64,13 @@ export function TelegramStarsForm({
         <div className="card p-4">
           <label className="mb-1.5 block text-sm font-medium">Email для чека</label>
           <input type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@mail.ru" />
+        </div>
+        <div className="card p-4">
+          <PaymentMethodPicker
+            value={paymentMethodId}
+            onChange={setPaymentMethodId}
+            amountRub={totalRub ?? undefined}
+          />
         </div>
         <aside className="card p-5">
         <h2 className="font-medium">К оплате</h2>

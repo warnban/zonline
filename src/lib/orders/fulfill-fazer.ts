@@ -2,6 +2,9 @@ import type { Order, Prisma } from "@prisma/client";
 import { fazerRequest } from "@/lib/fazercards/client";
 import { db } from "@/lib/db";
 import { sendOrderStatusEmail } from "@/lib/email/send";
+import {
+  notifyTelegramOrderCompleted,
+} from "@/lib/telegram/notify";
 
 type FazerOrderResponse = {
   ok: boolean;
@@ -27,6 +30,7 @@ async function applyFazerResult(orderId: string, res: FazerOrderResponse) {
       },
     });
     await sendOrderStatusEmail(updated).catch(console.error);
+    await notifyTelegramOrderCompleted(updated).catch(console.error);
     return;
   }
 
@@ -160,4 +164,5 @@ export async function markOrderCompletedFromWebhook(
     },
   });
   await sendOrderStatusEmail(updated).catch(console.error);
+  await notifyTelegramOrderCompleted(updated).catch(console.error);
 }

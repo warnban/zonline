@@ -2,7 +2,9 @@ import { nanoid } from "nanoid";
 import type { OrderType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { generatePublicOrderId } from "@/lib/pricing";
-import { buildFreekassaPaymentUrl, isFreekassaConfigured } from "@/lib/payments/freekassa";
+import { createFreekassaApiOrder } from "@/lib/payments/freekassa-api";
+import { isFreekassaConfigured } from "@/lib/payments/freekassa";
+import { DEFAULT_FREEKASSA_METHOD_ID } from "@/lib/payments/freekassa-methods";
 
 export type CreateOrderParams = {
   orderType: OrderType;
@@ -10,6 +12,8 @@ export type CreateOrderParams = {
   totalAmountRub: number;
   amountUsd: number;
   metadata: Record<string, unknown>;
+  paymentMethodId?: number;
+  clientIp?: string;
 };
 
 export async function createOrderWithPayment(input: CreateOrderParams) {
@@ -43,11 +47,20 @@ export async function createOrderWithPayment(input: CreateOrderParams) {
 
   let paymentUrl: string | null = null;
   if (isFreekassaConfigured()) {
-    paymentUrl = buildFreekassaPaymentUrl({
-      orderId: result.order.publicId,
+    const fk = await createFreekassaApiOrder({
+      paymentId: result.order.publicId,
       amountRub: Number(result.order.amountRub),
       email: result.order.email,
+      ip: input.clientIp ?? "127.0.0.1",
+      paymentMethodId: input.paymentMethodId ?? DEFAULT_FREEKASSA_METHOD_ID,
     });
+    paymentUrl = fk.paymentUrl;
+    if (fk.fkOrderId) {
+      await db.payment.update({
+        where: { id: result.payment.id },
+        data: { freekassaOrderId: String(fk.fkOrderId) },
+      });
+    }
   }
 
   return {

@@ -28,8 +28,8 @@ export type FreekassaUrls = {
 
 export function isFreekassaConfigured(): boolean {
   return Boolean(
-    env.FREEKASSA_MERCHANT_ID &&
-      env.FREEKASSA_SECRET_1 &&
+    env.FREEKASSA_API_KEY &&
+      env.FREEKASSA_MERCHANT_ID &&
       env.FREEKASSA_SECRET_2,
   );
 }
