@@ -21,6 +21,11 @@ const ibmPlex = IBM_Plex_Sans({
   weight: ["400", "500", "600"],
 });
 
+const YANDEX_VERIFICATION_CODE = "793e591384e240ce";
+
+const yandexVerification =
+  process.env.YANDEX_VERIFICATION?.trim() || YANDEX_VERIFICATION_CODE;
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
@@ -49,7 +54,7 @@ export const metadata: Metadata = {
   },
   robots: { index: true, follow: true },
   verification: {
-    yandex: process.env.YANDEX_VERIFICATION ?? "793e591384e240ce",
+    yandex: yandexVerification,
     ...(process.env.GOOGLE_SITE_VERIFICATION
       ? { google: process.env.GOOGLE_SITE_VERIFICATION }
       : {}),
@@ -64,10 +69,7 @@ export default function RootLayout({
   return (
     <html lang="ru" className="dark" suppressHydrationWarning>
       <head>
-        <meta
-          name="yandex-verification"
-          content={process.env.YANDEX_VERIFICATION ?? "793e591384e240ce"}
-        />
+        <meta name="yandex-verification" content={yandexVerification} />
       </head>
       <body
         className={`${onest.variable} ${ibmPlex.variable} min-h-screen antialiased`}
