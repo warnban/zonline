@@ -28,9 +28,9 @@ export function FreekassaSetupPanel() {
         Режим оплаты:{" "}
         <span className="font-medium text-foreground">
           {fk.paymentMode === "sci"
-            ? "SCI pay.fk.money (СБП/карта напрямую)"
+            ? "SCI (крипта)"
             : fk.paymentMode === "api"
-              ? "API (может открывать FK Wallet)"
+              ? "API (СБП/карты — orders/create)"
               : "не настроено"}
         </span>
       </p>
@@ -39,16 +39,10 @@ export function FreekassaSetupPanel() {
         <p className="font-medium">Переменные .env</p>
         <ul className="mt-2 list-inside list-disc space-y-1 text-muted">
           <li>
-            <code>FREEKASSA_SECRET_1</code> — подпись формы оплаты (SCI, обязательно для СБП/карт)
+            <code>FREEKASSA_API_KEY</code> — обязателен для СБП (44) и карт (36)
           </li>
           <li>
-            <code>FREEKASSA_SECRET_2</code> — подпись вебхука (ответ YES)
-          </li>
-          <li>
-            <code>FREEKASSA_MERCHANT_ID</code> — ID магазина
-          </li>
-          <li>
-            <code>FREEKASSA_API_KEY</code> — опционально, fallback если нет SECRET_1
+            <code>FREEKASSA_SECRET_1</code> — опционально, для SCI (крипта)
           </li>
           <li>
             <code>FREEKASSA_CLIENT_IP</code> — IP сервера для API fallback

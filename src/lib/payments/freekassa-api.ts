@@ -32,20 +32,15 @@ function resolvePaymentUrl(
   json: { location?: string; orderId?: number; orderHash?: string },
   headerLocation: string | null,
 ): string {
-  const fromIds =
-    json.orderId && json.orderHash
-      ? buildFreekassaPayFormUrl(json.orderId, json.orderHash)
-      : "";
+  // По докам: location — ссылка для клиента (может быть fmt.me, pay.freekassa.net и т.д.)
+  const location = json.location?.trim() || headerLocation?.trim();
+  if (location) return location;
 
-  // По докам: location часто пустой — URL собирается из orderId + orderHash.
-  // API иногда отдаёт fmt.me (FK Wallet) — игнорируем, берём pay.freekassa.net.
-  const candidates = [headerLocation, json.location?.trim(), fromIds].filter(Boolean) as string[];
-
-  for (const url of candidates) {
-    if (isTrustedFreekassaPayUrl(url)) return url;
+  if (json.orderId && json.orderHash) {
+    return buildFreekassaPayFormUrl(json.orderId, json.orderHash);
   }
 
-  return fromIds;
+  return "";
 }
 
 export type CreateFreekassaApiOrderInput = {
@@ -157,12 +152,6 @@ export async function createFreekassaApiOrder(
 
   if (!paymentUrl) {
     throw new Error("Freekassa API: missing payment URL");
-  }
-
-  if (json.location && !isTrustedFreekassaPayUrl(json.location)) {
-    console.warn(
-      `[freekassa] Ignored wallet redirect URL, using pay.freekassa.net (method i=${input.paymentMethodId})`,
-    );
   }
 
   return {

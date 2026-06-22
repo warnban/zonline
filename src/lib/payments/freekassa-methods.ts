@@ -40,6 +40,13 @@ export const FREEKASSA_PAYMENT_METHODS: FreekassaPaymentMethod[] = [
 
 export const DEFAULT_FREEKASSA_METHOD_ID = 44;
 
+/** СБП (44) и Card RUB API (36) — только через orders/create, не SCI. */
+export const FREEKASSA_API_ONLY_METHOD_IDS = new Set([44, 36]);
+
+export function isApiOnlyFreekassaMethod(id: number): boolean {
+  return FREEKASSA_API_ONLY_METHOD_IDS.has(id);
+}
+
 export function getFreekassaMethod(id: number): FreekassaPaymentMethod | undefined {
   return FREEKASSA_PAYMENT_METHODS.find((m) => m.id === id);
 }

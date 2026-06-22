@@ -66,14 +66,12 @@ export function getFreekassaConfigStatus(): {
   const hasApi = Boolean(env.FREEKASSA_API_KEY?.trim());
 
   if (!hasSci && !hasApi) {
-    missing.push("FREEKASSA_SECRET_1 (рекомендуется для СБП/карт) или FREEKASSA_API_KEY");
-  } else if (!hasSci) {
-    missing.push("FREEKASSA_SECRET_1 (без него оплата уходит в FK Wallet)");
+    missing.push("FREEKASSA_API_KEY (обязателен для СБП/карт)");
   }
 
   let paymentMode: "sci" | "api" | "none" = "none";
-  if (isFreekassaSciConfigured()) paymentMode = "sci";
-  else if (isFreekassaApiConfigured()) paymentMode = "api";
+  if (isFreekassaApiConfigured()) paymentMode = "api";
+  else if (isFreekassaSciConfigured()) paymentMode = "sci";
 
   return {
     configured: isFreekassaConfigured(),

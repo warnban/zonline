@@ -4,7 +4,10 @@ import {
   isFreekassaApiConfigured,
   isFreekassaSciConfigured,
 } from "@/lib/payments/freekassa";
-import { DEFAULT_FREEKASSA_METHOD_ID } from "@/lib/payments/freekassa-methods";
+import {
+  DEFAULT_FREEKASSA_METHOD_ID,
+  isApiOnlyFreekassaMethod,
+} from "@/lib/payments/freekassa-methods";
 
 export type FreekassaCheckoutInput = {
   paymentId: string;
@@ -21,28 +24,19 @@ export type FreekassaCheckoutResult = {
 };
 
 /**
- * Создаёт ссылку на оплату.
- * SCI (pay.fk.money + i=44/36/…) — прямой СБП/карта по докам Freekassa §1.3.
- * API orders/create на многих магазинах отдаёт pay.freekassa.net / fmt.me → FK Wallet.
+ * СБП (44) и карты РФ API (36) — только orders/create (на fmt.me иначе «только по API»).
+ * Крипта — API если есть ключ, иначе SCI.
  */
 export async function createFreekassaCheckout(
   input: FreekassaCheckoutInput,
 ): Promise<FreekassaCheckoutResult> {
   const paymentMethodId = input.paymentMethodId ?? DEFAULT_FREEKASSA_METHOD_ID;
+  const mustUseApi = isApiOnlyFreekassaMethod(paymentMethodId);
 
-  if (isFreekassaSciConfigured()) {
-    return {
-      mode: "sci",
-      paymentUrl: buildFreekassaPaymentUrl({
-        orderId: input.paymentId,
-        amountRub: input.amountRub,
-        email: input.email,
-        paymentMethodId,
-      }),
-    };
-  }
-
-  if (isFreekassaApiConfigured()) {
+  if (mustUseApi || isFreekassaApiConfigured()) {
+    if (!isFreekassaApiConfigured()) {
+      throw new Error("Freekassa API required for SBP and card payments (FREEKASSA_API_KEY)");
+    }
     const fk = await createFreekassaApiOrder({
       paymentId: input.paymentId,
       amountRub: input.amountRub,
@@ -54,6 +48,18 @@ export async function createFreekassaCheckout(
       mode: "api",
       paymentUrl: fk.paymentUrl,
       fkOrderId: fk.fkOrderId,
+    };
+  }
+
+  if (isFreekassaSciConfigured()) {
+    return {
+      mode: "sci",
+      paymentUrl: buildFreekassaPaymentUrl({
+        orderId: input.paymentId,
+        amountRub: input.amountRub,
+        email: input.email,
+        paymentMethodId,
+      }),
     };
   }
 
