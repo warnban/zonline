@@ -48,11 +48,12 @@ export const metadata: Metadata = {
     url: siteUrl,
   },
   robots: { index: true, follow: true },
-  ...(process.env.YANDEX_VERIFICATION
-    ? { verification: { yandex: process.env.YANDEX_VERIFICATION, google: process.env.GOOGLE_SITE_VERIFICATION } }
-    : process.env.GOOGLE_SITE_VERIFICATION
-      ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } }
+  verification: {
+    yandex: process.env.YANDEX_VERIFICATION ?? "793e591384e240ce",
+    ...(process.env.GOOGLE_SITE_VERIFICATION
+      ? { google: process.env.GOOGLE_SITE_VERIFICATION }
       : {}),
+  },
 };
 
 export default function RootLayout({
