@@ -6,17 +6,20 @@ type Props = {
   usdRubRate: number;
   defaultMarkupPct: number;
   steamCommissionPct: number;
+  steamFixedFeeRub: number;
 };
 
 export function PricingSettingsForm({
   usdRubRate,
   defaultMarkupPct,
   steamCommissionPct,
+  steamFixedFeeRub,
 }: Props) {
   const [form, setForm] = useState({
     usdRubRate: String(usdRubRate),
     defaultMarkupPct: String(defaultMarkupPct),
     steamCommissionPct: String(steamCommissionPct),
+    steamFixedFeeRub: String(steamFixedFeeRub),
   });
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,6 +36,7 @@ export function PricingSettingsForm({
           usdRubRate: Number(form.usdRubRate),
           defaultMarkupPct: Number(form.defaultMarkupPct),
           steamCommissionPct: Number(form.steamCommissionPct),
+          steamFixedFeeRub: Number(form.steamFixedFeeRub),
         }),
       });
       setMsg(res.ok ? "Сохранено" : "Ошибка сохранения");
@@ -67,13 +71,24 @@ export function PricingSettingsForm({
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-muted">Комиссия Steam, %</label>
+        <label className="mb-1 block text-xs text-muted">Steam: комиссия, % от суммы на кошелёk</label>
         <input
           className="input"
           type="number"
           step="0.1"
           value={form.steamCommissionPct}
           onChange={(e) => setForm((f) => ({ ...f, steamCommissionPct: e.target.value }))}
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs text-muted">Steam: сервисный сбор, ₽ (фикс)</label>
+        <input
+          className="input"
+          type="number"
+          step="1"
+          min="0"
+          value={form.steamFixedFeeRub}
+          onChange={(e) => setForm((f) => ({ ...f, steamFixedFeeRub: e.target.value }))}
         />
       </div>
       {msg && <p className="text-sm text-muted">{msg}</p>}

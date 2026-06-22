@@ -15,6 +15,7 @@ export default async function AdminSettingsPage() {
         usdRubRate={pricing.usdRubRate}
         defaultMarkupPct={pricing.defaultMarkupPct}
         steamCommissionPct={pricing.steamCommissionPct}
+        steamFixedFeeRub={pricing.steamFixedFeeRub}
       />
       <FreekassaSetupPanel />
       <FazerWebhookPanel />

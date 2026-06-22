@@ -9,15 +9,24 @@ export function calculateRetailRub(
   return Math.ceil(wholesaleUsd * settings.usdRubRate * (1 + markup / 100));
 }
 
-/** Сумма к оплате за пополнение Steam: walletAmountRub — сколько зачислится на кошелёк */
+/** Сумма к оплате за пополнение Steam: walletAmountRub — сколько зачислится на кошелёk */
 export function calculateSteamPaymentRub(
   walletAmountRub: number,
   settings: PricingSettings,
-): { walletRub: number; feeRub: number; totalRub: number; feePct: number } {
+): {
+  walletRub: number;
+  feePctRub: number;
+  fixedFeeRub: number;
+  feeRub: number;
+  totalRub: number;
+  feePct: number;
+} {
   const feePct = settings.steamCommissionPct;
-  const totalRub = Math.ceil(walletAmountRub * (1 + feePct / 100));
-  const feeRub = totalRub - walletAmountRub;
-  return { walletRub: walletAmountRub, feeRub, totalRub, feePct };
+  const fixedFeeRub = settings.steamFixedFeeRub;
+  const feePctRub = Math.ceil(walletAmountRub * (feePct / 100));
+  const feeRub = fixedFeeRub + feePctRub;
+  const totalRub = walletAmountRub + feeRub;
+  return { walletRub: walletAmountRub, feePctRub, fixedFeeRub, feeRub, totalRub, feePct };
 }
 
 /** Оценка USD себестоимости Steam-пополнения по курсу FazerCards */

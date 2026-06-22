@@ -16,8 +16,10 @@ const envSchema = z.object({
   USD_RUB_RATE: z.coerce.number().default(92),
   /** Общая наценка сервиса, % */
   DEFAULT_MARKUP_PCT: z.coerce.number().default(10),
-  /** Доп. комиссия за пополнение Steam, % (сверх наценки) */
-  STEAM_COMMISSION_PCT: z.coerce.number().default(5),
+  /** Доп. комиссия за пополнение Steam, % (от суммы на кошелёк) */
+  STEAM_COMMISSION_PCT: z.coerce.number().default(1),
+  /** Фикс. сервисный сбор за пополнение Steam, ₽ */
+  STEAM_FIXED_FEE_RUB: z.coerce.number().default(50),
   ADMIN_JWT_SECRET: z.string().default("dev-admin-secret-change-me"),
   ADMIN_BOOTSTRAP_SECRET: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),

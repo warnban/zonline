@@ -180,7 +180,11 @@ export function SteamCheckoutForm({ rates, settings, heading = "Пополнен
             </div>
             <div className="flex justify-between">
               <dt className="text-muted">Комиссия ({payment.feePct}%)</dt>
-              <dd>{formatRub(payment.feeRub)}</dd>
+              <dd>{formatRub(payment.feePctRub)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted">Сервисный сбор</dt>
+              <dd>{formatRub(payment.fixedFeeRub)}</dd>
             </div>
             <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
               <dt>Итого</dt>

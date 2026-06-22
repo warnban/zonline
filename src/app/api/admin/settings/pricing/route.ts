@@ -7,6 +7,7 @@ const schema = z.object({
   usdRubRate: z.number().positive().max(500),
   defaultMarkupPct: z.number().min(0).max(100),
   steamCommissionPct: z.number().min(0).max(100),
+  steamFixedFeeRub: z.number().min(0).max(10_000),
 });
 
 export async function PUT(request: Request) {

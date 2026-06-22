@@ -6,14 +6,17 @@ export type PricingSettings = {
   usdRubRate: number;
   /** Общая наценка сервиса, % */
   defaultMarkupPct: number;
-  /** Доп. комиссия только за пополнение Steam, % */
+  /** Комиссия Steam, % от суммы на кошелёк */
   steamCommissionPct: number;
+  /** Фикс. сервисный сбор Steam, ₽ */
+  steamFixedFeeRub: number;
 };
 
 const KEYS = {
   usdRubRate: "pricing.usd_rub_rate",
   defaultMarkupPct: "pricing.default_markup_pct",
   steamCommissionPct: "pricing.steam_commission_pct",
+  steamFixedFeeRub: "pricing.steam_fixed_fee_rub",
 } as const;
 
 async function getDbNumber(key: string): Promise<number | null> {
@@ -40,16 +43,19 @@ async function setDbNumber(key: string, value: number) {
 }
 
 export async function getPricingSettings(): Promise<PricingSettings> {
-  const [usdRubRate, defaultMarkupPct, steamCommissionPct] = await Promise.all([
-    getDbNumber(KEYS.usdRubRate),
-    getDbNumber(KEYS.defaultMarkupPct),
-    getDbNumber(KEYS.steamCommissionPct),
-  ]);
+  const [usdRubRate, defaultMarkupPct, steamCommissionPct, steamFixedFeeRub] =
+    await Promise.all([
+      getDbNumber(KEYS.usdRubRate),
+      getDbNumber(KEYS.defaultMarkupPct),
+      getDbNumber(KEYS.steamCommissionPct),
+      getDbNumber(KEYS.steamFixedFeeRub),
+    ]);
 
   return {
     usdRubRate: usdRubRate ?? env.USD_RUB_RATE,
     defaultMarkupPct: defaultMarkupPct ?? env.DEFAULT_MARKUP_PCT,
     steamCommissionPct: steamCommissionPct ?? env.STEAM_COMMISSION_PCT,
+    steamFixedFeeRub: steamFixedFeeRub ?? env.STEAM_FIXED_FEE_RUB,
   };
 }
 
@@ -58,6 +64,7 @@ export async function updatePricingSettings(input: PricingSettings) {
     setDbNumber(KEYS.usdRubRate, input.usdRubRate),
     setDbNumber(KEYS.defaultMarkupPct, input.defaultMarkupPct),
     setDbNumber(KEYS.steamCommissionPct, input.steamCommissionPct),
+    setDbNumber(KEYS.steamFixedFeeRub, input.steamFixedFeeRub),
   ]);
 }
 
@@ -66,5 +73,6 @@ export function getPricingSettingsSync(): PricingSettings {
     usdRubRate: env.USD_RUB_RATE,
     defaultMarkupPct: env.DEFAULT_MARKUP_PCT,
     steamCommissionPct: env.STEAM_COMMISSION_PCT,
+    steamFixedFeeRub: env.STEAM_FIXED_FEE_RUB,
   };
 }
