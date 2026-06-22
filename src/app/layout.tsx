@@ -63,6 +63,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru" className="dark" suppressHydrationWarning>
+      <head>
+        <meta
+          name="yandex-verification"
+          content={process.env.YANDEX_VERIFICATION ?? "793e591384e240ce"}
+        />
+      </head>
       <body
         className={`${onest.variable} ${ibmPlex.variable} min-h-screen antialiased`}
       >
